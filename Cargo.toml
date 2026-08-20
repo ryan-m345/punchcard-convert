@@ -1,0 +1,10 @@
+[package]
+name = "punchcard-convert"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "punchcard-convert"
+path = "src/main.rs"
+
+[dependencies]
