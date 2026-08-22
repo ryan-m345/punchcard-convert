@@ -1,5 +1,6 @@
 mod csv;
 mod punch;
+mod summary;
 
 use std::env;
 use std::fs;
@@ -14,11 +15,13 @@ enum Format {
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
+
+    if args.len() == 3 && args[1] == "--summary" {
+        return run_summary(&args[2]);
+    }
+
     if args.len() != 3 {
-        let prog = args.first().map(String::as_str).unwrap_or("punchcard-convert");
-        eprintln!("usage: {} <input-file> <output-file>", prog);
-        eprintln!();
-        eprintln!("the format on each side is inferred from the extension (.punch or .csv)");
+        print_usage(&args);
         return ExitCode::FAILURE;
     }
 
@@ -65,6 +68,56 @@ fn main() -> ExitCode {
     }
 
     eprintln!("wrote {} entries to {}", entries.len(), output_path);
+    ExitCode::SUCCESS
+}
+
+fn print_usage(args: &[String]) {
+    let prog = args.first().map(String::as_str).unwrap_or("punchcard-convert");
+    eprintln!("usage: {} <input-file> <output-file>", prog);
+    eprintln!("       {} --summary <input-file>", prog);
+    eprintln!();
+    eprintln!("the format on each side is inferred from the extension (.punch or .csv)");
+}
+
+fn run_summary(input_path: &str) -> ExitCode {
+    let format = match extension_of(input_path) {
+        Some(f) => f,
+        None => {
+            eprintln!("error: expected \"{}\" to end in .punch or .csv", input_path);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let contents = match fs::read_to_string(input_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error: couldn't read \"{}\": {}", input_path, e);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let entries = match format {
+        Format::Punch => punch::parse(&contents),
+        Format::Csv => csv::parse(&contents),
+    };
+    let entries = match entries {
+        Ok(entries) => entries,
+        Err(err) => {
+            eprintln!("error in {}:", input_path);
+            eprintln!("{}", err);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let report = match summary::summarize(&entries) {
+        Ok(report) => report,
+        Err(msg) => {
+            eprintln!("error in {}: {}", input_path, msg);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    print!("{}", summary::render(&report));
     ExitCode::SUCCESS
 }
 

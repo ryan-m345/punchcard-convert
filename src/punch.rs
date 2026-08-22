@@ -163,6 +163,15 @@ fn validate_time_range(tok: &str) -> Result<(&str, &str), (usize, String)> {
     Ok((start, end))
 }
 
+/// Converts an `HH:MM` string to minutes since midnight. Assumes the string
+/// already passed `validate_hhmm`, which is true for every `Entry` field
+/// since both parsers validate before constructing one.
+pub(crate) fn hhmm_to_minutes(s: &str) -> u32 {
+    let hour: u32 = s[0..2].parse().unwrap();
+    let minute: u32 = s[3..5].parse().unwrap();
+    hour * 60 + minute
+}
+
 pub(crate) fn validate_hhmm(s: &str) -> Result<(), String> {
     let bytes = s.as_bytes();
     if s.len() != 5 || bytes[2] != b':' {

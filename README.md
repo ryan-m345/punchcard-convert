@@ -44,6 +44,27 @@ way (`"..."`, with `""` for an embedded quote).
 
 The format on each side is inferred from the file extension.
 
+To see total hours instead of converting, use `--summary`:
+
+    punchcard-convert --summary timesheet.punch
+
+which prints total time per entry, per day, and per project:
+
+    per entry:
+      2026-08-18 09:00-12:15 acme-corp         3:15
+      2026-08-18 13:00-17:30 acme-corp         4:30
+      2026-08-19 09:15-11:00 side-project      1:45
+
+    per day:
+      2026-08-18   7:45
+      2026-08-19   1:45
+
+    per project:
+      acme-corp        7:45
+      side-project     1:45
+
+    total: 9:30
+
 ## Error messages
 
 Timesheets get edited by hand, so typos happen. Given a file with a
@@ -64,9 +85,9 @@ the specific field that's wrong.
 
 ## Status
 
-Early. Dates and times are validated but not yet turned into duration
-math (total hours per entry, per day, per project). See the roadmap
-for what's next.
+Early. Duration math (`--summary`) assumes same-day shifts; an entry
+where the end time isn't after the start time is rejected rather than
+treated as crossing midnight. Overnight shifts aren't supported yet.
 
 ## License
 
