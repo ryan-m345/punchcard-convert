@@ -27,6 +27,12 @@ Blank lines and lines starting with `#` are ignored. Dates are
 `YYYY-MM-DD`, times are 24-hour `HH:MM`. Notes are optional and run to
 the end of the line.
 
+If the end time is earlier than the start time, the shift is assumed
+to cross midnight (e.g. `22:00-02:00` is four hours), and the whole
+duration is counted against the entry's date. An end time equal to
+the start time is rejected, since that's ambiguous between a
+zero-length shift and a full 24 hours.
+
 ## CSV format
 
     date,start,end,project,notes
@@ -70,14 +76,14 @@ which prints total time per entry, per day, and per project:
 Timesheets get edited by hand, so typos happen. Given a file with a
 mistyped time range:
 
-    2026-08-19 11:00-09:30 side-project writing docs
+    2026-08-19 09:30-09:30 side-project writing docs
 
 running the converter reports exactly where the problem is, not just
 that there was one:
 
     error in timesheet.punch:
-    line 1, column 18: end time 09:30 must be after start time 11:00 (overnight shifts aren't supported yet)
-      2026-08-19 11:00-09:30 side-project writing docs
+    line 1, column 18: end time 09:30 must differ from start time 09:30 (a zero-length or 24-hour shift can't be represented)
+      2026-08-19 09:30-09:30 side-project writing docs
                        ^
 
 Malformed CSV rows get the same treatment, with the column pointing at
@@ -85,9 +91,8 @@ the specific field that's wrong.
 
 ## Status
 
-Early. Duration math (`--summary`) assumes same-day shifts; an entry
-where the end time isn't after the start time is rejected rather than
-treated as crossing midnight. Overnight shifts aren't supported yet.
+Early. Only reads and writes local files; no stdin/stdout support yet,
+and overlapping time entries aren't detected.
 
 ## License
 

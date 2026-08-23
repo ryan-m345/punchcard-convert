@@ -37,16 +37,23 @@ pub fn summarize(entries: &[Entry]) -> Result<Summary<'_>, String> {
     })
 }
 
+const MINUTES_PER_DAY: u32 = 24 * 60;
+
 fn duration_minutes(entry: &Entry) -> Result<u32, String> {
     let start = hhmm_to_minutes(&entry.start);
     let end = hhmm_to_minutes(&entry.end);
-    if end <= start {
+    if end == start {
         return Err(format!(
-            "{} {}-{} {}: end time is not after start time (overnight shifts aren't supported yet)",
+            "{} {}-{} {}: end time must differ from start time (a zero-length or 24-hour shift can't be represented)",
             entry.date, entry.start, entry.end, entry.project
         ));
     }
-    Ok(end - start)
+    if end < start {
+        // crosses midnight: counted entirely against the entry's (start) date
+        Ok((MINUTES_PER_DAY - start) + end)
+    } else {
+        Ok(end - start)
+    }
 }
 
 pub fn format_hm(minutes: u32) -> String {
@@ -121,13 +128,18 @@ mod tests {
     }
 
     #[test]
-    fn rejects_end_before_or_equal_to_start() {
-        let entries = vec![entry("2026-08-18", "11:00", "09:30", "acme-corp")];
-        let err = summarize(&entries).unwrap_err();
-        assert!(err.contains("overnight shifts aren't supported yet"));
+    fn computes_duration_across_midnight() {
+        let entries = vec![entry("2026-08-18", "22:00", "02:00", "acme-corp")];
+        let summary = summarize(&entries).unwrap();
+        assert_eq!(summary.entries[0].minutes, 240);
+        assert_eq!(summary.per_day["2026-08-18"], 240);
+    }
 
+    #[test]
+    fn rejects_zero_length_shift() {
         let entries = vec![entry("2026-08-18", "11:00", "11:00", "acme-corp")];
-        assert!(summarize(&entries).is_err());
+        let err = summarize(&entries).unwrap_err();
+        assert!(err.contains("must differ from start time"));
     }
 
     #[test]

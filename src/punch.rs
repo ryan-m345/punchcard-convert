@@ -148,13 +148,13 @@ fn validate_time_range(tok: &str) -> Result<(&str, &str), (usize, String)> {
     validate_hhmm(start).map_err(|msg| (0, msg))?;
     validate_hhmm(end).map_err(|msg| (dash + 1, msg))?;
 
-    // HH:MM is fixed-width and zero-padded, so a plain string compare doubles
-    // as a chronological one.
-    if end <= start {
+    // end < start means the shift crosses midnight; end == start is ambiguous
+    // (zero-length or a full 24 hours) so that's still rejected.
+    if end == start {
         return Err((
             dash + 1,
             format!(
-                "end time {} must be after start time {} (overnight shifts aren't supported yet)",
+                "end time {} must differ from start time {} (a zero-length or 24-hour shift can't be represented)",
                 end, start
             ),
         ));

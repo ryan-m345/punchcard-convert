@@ -70,6 +70,17 @@ pub fn parse(input: &str) -> Result<Vec<Entry>, ParseError> {
         if let Err(msg) = validate_hhmm(end) {
             return Err(ParseError::new(line_no, end_col + 1, msg, raw_line));
         }
+        if end == start {
+            return Err(ParseError::new(
+                line_no,
+                end_col + 1,
+                format!(
+                    "end time {} must differ from start time {} (a zero-length or 24-hour shift can't be represented)",
+                    end, start
+                ),
+                raw_line,
+            ));
+        }
         let (project_col, project) = &fields[3];
         if project.trim().is_empty() {
             return Err(ParseError::new(
