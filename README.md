@@ -48,7 +48,13 @@ way (`"..."`, with `""` for an embedded quote).
     punchcard-convert timesheet.punch timesheet.csv
     punchcard-convert timesheet.csv timesheet.punch
 
-The format on each side is inferred from the file extension.
+The format on each side is inferred from the file extension. Use `-` in
+place of either file to read from stdin or write to stdout; its format
+is inferred as the opposite of whichever format the other side
+resolves to, since there are only two:
+
+    cat timesheet.punch | punchcard-convert - out.csv
+    punchcard-convert timesheet.punch - > out.csv
 
 To see total hours instead of converting, use `--summary`:
 
@@ -91,8 +97,9 @@ the specific field that's wrong.
 
 ## Status
 
-Early. Only reads and writes local files; no stdin/stdout support yet,
-and overlapping time entries aren't detected.
+Early. `--summary` still needs a real file with a recognized extension
+(there's no second file to infer its format from), and overlapping
+time entries aren't detected yet.
 
 ## License
 
