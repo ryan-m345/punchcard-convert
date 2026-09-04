@@ -1,4 +1,4 @@
-use crate::punch::{hhmm_to_minutes, Entry};
+use crate::punch::{date_to_days, hhmm_to_minutes, Entry};
 use std::collections::BTreeMap;
 
 pub struct EntryDuration<'a> {
@@ -16,6 +16,8 @@ pub struct Summary<'a> {
 /// Computes total minutes worked per entry, per day, and per project.
 /// Dates sort correctly as plain strings because they're always `YYYY-MM-DD`.
 pub fn summarize(entries: &[Entry]) -> Result<Summary<'_>, String> {
+    check_overlaps(entries)?;
+
     let mut per_day = BTreeMap::new();
     let mut per_project = BTreeMap::new();
     let mut total_minutes = 0u32;
@@ -35,6 +37,59 @@ pub fn summarize(entries: &[Entry]) -> Result<Summary<'_>, String> {
         per_project,
         total_minutes,
     })
+}
+
+struct Interval<'a> {
+    start: i64,
+    end: i64,
+    entry: &'a Entry,
+}
+
+/// Rejects entries whose time ranges overlap, comparing across dates too so
+/// a shift that crosses midnight is checked against the next day's entries.
+/// Sorting by start and tracking the furthest end seen so far catches any
+/// overlapping pair, not just ones adjacent in the sort order.
+fn check_overlaps(entries: &[Entry]) -> Result<(), String> {
+    let mut intervals: Vec<Interval> = entries
+        .iter()
+        .map(|e| {
+            let day = date_to_days(&e.date);
+            let start_min = hhmm_to_minutes(&e.start) as i64;
+            let end_min = hhmm_to_minutes(&e.end) as i64;
+            let start = day * 1440 + start_min;
+            let end = if end_min <= start_min {
+                (day + 1) * 1440 + end_min
+            } else {
+                day * 1440 + end_min
+            };
+            Interval { start, end, entry: e }
+        })
+        .collect();
+
+    intervals.sort_by_key(|iv| iv.start);
+
+    let mut furthest: Option<&Interval> = None;
+    for iv in &intervals {
+        if let Some(prev) = furthest {
+            if iv.start < prev.end {
+                return Err(format!(
+                    "{} {}-{} {} overlaps with {} {}-{} {}",
+                    prev.entry.date,
+                    prev.entry.start,
+                    prev.entry.end,
+                    prev.entry.project,
+                    iv.entry.date,
+                    iv.entry.start,
+                    iv.entry.end,
+                    iv.entry.project
+                ));
+            }
+        }
+        if furthest.map_or(true, |prev| iv.end > prev.end) {
+            furthest = Some(iv);
+        }
+    }
+    Ok(())
 }
 
 const MINUTES_PER_DAY: u32 = 24 * 60;
@@ -147,5 +202,45 @@ mod tests {
         assert_eq!(format_hm(0), "0:00");
         assert_eq!(format_hm(65), "1:05");
         assert_eq!(format_hm(570), "9:30");
+    }
+
+    #[test]
+    fn rejects_overlapping_entries_same_day() {
+        let entries = vec![
+            entry("2026-08-18", "09:00", "12:15", "acme-corp"),
+            entry("2026-08-18", "11:00", "13:00", "side-project"),
+        ];
+        let err = summarize(&entries).unwrap_err();
+        assert!(err.contains("overlaps with"));
+    }
+
+    #[test]
+    fn allows_back_to_back_entries() {
+        let entries = vec![
+            entry("2026-08-18", "09:00", "12:00", "acme-corp"),
+            entry("2026-08-18", "12:00", "13:00", "side-project"),
+        ];
+        assert!(summarize(&entries).is_ok());
+    }
+
+    #[test]
+    fn rejects_overlap_across_midnight_into_next_day() {
+        let entries = vec![
+            entry("2026-08-18", "22:00", "02:00", "acme-corp"),
+            entry("2026-08-19", "01:00", "03:00", "side-project"),
+        ];
+        let err = summarize(&entries).unwrap_err();
+        assert!(err.contains("overlaps with"));
+    }
+
+    #[test]
+    fn detects_overlap_regardless_of_input_order() {
+        let entries = vec![
+            entry("2026-08-19", "10:00", "11:00", "side-project"),
+            entry("2026-08-18", "09:00", "12:00", "acme-corp"),
+            entry("2026-08-18", "10:00", "13:00", "other-corp"),
+        ];
+        let err = summarize(&entries).unwrap_err();
+        assert!(err.contains("overlaps with"));
     }
 }

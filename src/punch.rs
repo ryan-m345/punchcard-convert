@@ -192,6 +192,24 @@ pub(crate) fn validate_hhmm(s: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Converts a validated `YYYY-MM-DD` string to a day number (days since the
+/// Unix epoch, may be negative for dates before 1970). Used to compare
+/// entries across dates, e.g. for overlap detection. Assumes the string
+/// already passed `validate_date`.
+pub(crate) fn date_to_days(s: &str) -> i64 {
+    let year: i64 = s[0..4].parse().unwrap();
+    let month: i64 = s[5..7].parse().unwrap();
+    let day: i64 = s[8..10].parse().unwrap();
+
+    // Howard Hinnant's days_from_civil algorithm.
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let doy = (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
+}
+
 pub(crate) fn validate_date(s: &str) -> Result<(), String> {
     let bytes = s.as_bytes();
     if s.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {

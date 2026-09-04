@@ -95,11 +95,15 @@ that there was one:
 Malformed CSV rows get the same treatment, with the column pointing at
 the specific field that's wrong.
 
+`--summary` also rejects overlapping time entries, checking across
+midnight-crossing shifts into the next day too:
+
+    error in timesheet.punch: 2026-08-18 09:00-12:15 acme-corp overlaps with 2026-08-18 11:00-13:00 side-project
+
 ## Status
 
 Early. `--summary` still needs a real file with a recognized extension
-(there's no second file to infer its format from), and overlapping
-time entries aren't detected yet.
+(there's no second file to infer its format from).
 
 ## License
 
