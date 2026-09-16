@@ -185,3 +185,79 @@ fn split_csv_line(line: &str) -> Vec<(usize, String)> {
 
     fields
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HEADER_LINE: &str = "date,start,end,project,notes\n";
+
+    #[test]
+    fn parses_valid_row_including_quoted_notes() {
+        let input = format!("{}2026-08-18,09:00,12:15,acme-corp,\"hello, world\"\n", HEADER_LINE);
+        let entries = parse(&input).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].notes, "hello, world");
+    }
+
+    #[test]
+    fn empty_input_reports_line_one_column_one() {
+        let err = parse("").unwrap_err();
+        assert_eq!(err.line(), 1);
+        assert_eq!(err.column(), 1);
+        assert!(err.message().contains("empty file"));
+    }
+
+    #[test]
+    fn wrong_header_reports_line_one_column_one() {
+        let err = parse("date,start,end,project\n").unwrap_err();
+        assert_eq!(err.line(), 1);
+        assert_eq!(err.column(), 1);
+        assert!(err.message().contains("expected header"));
+    }
+
+    #[test]
+    fn missing_field_points_past_end_of_last_field() {
+        let input = format!("{}2026-08-18,09:00,12:15\n", HEADER_LINE);
+        let err = parse(&input).unwrap_err();
+        assert_eq!(err.line(), 2);
+        assert_eq!(err.column(), 23);
+        assert!(err.message().contains("expected 5 fields"));
+    }
+
+    #[test]
+    fn invalid_date_points_at_date_field() {
+        let input = format!("{}2026-13-18,09:00,12:15,acme-corp,notes\n", HEADER_LINE);
+        let err = parse(&input).unwrap_err();
+        assert_eq!(err.line(), 2);
+        assert_eq!(err.column(), 1);
+        assert!(err.message().contains("invalid month 13"));
+    }
+
+    #[test]
+    fn invalid_start_time_points_at_start_field() {
+        let input = format!("{}2026-08-18,25:00,12:15,acme-corp,notes\n", HEADER_LINE);
+        let err = parse(&input).unwrap_err();
+        assert_eq!(err.line(), 2);
+        assert_eq!(err.column(), 12);
+        assert!(err.message().contains("invalid hour 25"));
+    }
+
+    #[test]
+    fn zero_length_shift_points_at_end_field() {
+        let input = format!("{}2026-08-18,09:00,09:00,acme-corp,notes\n", HEADER_LINE);
+        let err = parse(&input).unwrap_err();
+        assert_eq!(err.line(), 2);
+        assert_eq!(err.column(), 18);
+        assert!(err.message().contains("must differ from start time"));
+    }
+
+    #[test]
+    fn empty_project_points_at_project_field() {
+        let input = format!("{}2026-08-18,09:00,12:15,,notes\n", HEADER_LINE);
+        let err = parse(&input).unwrap_err();
+        assert_eq!(err.line(), 2);
+        assert_eq!(err.column(), 24);
+        assert!(err.message().contains("project must not be empty"));
+    }
+}

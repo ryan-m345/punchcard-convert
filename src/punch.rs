@@ -26,6 +26,18 @@ impl ParseError {
             line_text: line_text.to_string(),
         }
     }
+
+    pub(crate) fn line(&self) -> usize {
+        self.line
+    }
+
+    pub(crate) fn column(&self) -> usize {
+        self.column
+    }
+
+    pub(crate) fn message(&self) -> &str {
+        &self.message
+    }
 }
 
 impl fmt::Display for ParseError {
@@ -258,4 +270,82 @@ fn month_name(month: u32) -> &'static str {
         "October", "November", "December",
     ];
     NAMES[(month - 1) as usize]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_valid_entry_with_notes() {
+        let entries = parse("2026-08-18 09:00-12:15 acme-corp setup dev environment\n").unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].date, "2026-08-18");
+        assert_eq!(entries[0].start, "09:00");
+        assert_eq!(entries[0].end, "12:15");
+        assert_eq!(entries[0].project, "acme-corp");
+        assert_eq!(entries[0].notes, "setup dev environment");
+    }
+
+    #[test]
+    fn skips_comments_and_blank_lines() {
+        let entries = parse("# week of aug 17\n\n2026-08-18 09:00-12:15 acme-corp\n").unwrap();
+        assert_eq!(entries.len(), 1);
+    }
+
+    #[test]
+    fn missing_fields_points_past_end_of_last_token() {
+        let err = parse("2026-08-18 09:00-12:15\n").unwrap_err();
+        assert_eq!(err.line(), 1);
+        assert_eq!(err.column(), 23);
+        assert!(err.message().contains("expected DATE START-END PROJECT"));
+    }
+
+    #[test]
+    fn invalid_month_points_at_date_token() {
+        let err = parse("2026-13-18 09:00-12:15 acme-corp\n").unwrap_err();
+        assert_eq!(err.line(), 1);
+        assert_eq!(err.column(), 1);
+        assert!(err.message().contains("invalid month 13"));
+    }
+
+    #[test]
+    fn time_range_missing_dash_points_at_time_token() {
+        let err = parse("2026-08-18 0900 acme-corp\n").unwrap_err();
+        assert_eq!(err.line(), 1);
+        assert_eq!(err.column(), 12);
+        assert!(err.message().contains("invalid time range \"0900\""));
+    }
+
+    #[test]
+    fn invalid_hour_points_at_start_time() {
+        let err = parse("2026-08-18 25:00-12:15 acme-corp\n").unwrap_err();
+        assert_eq!(err.line(), 1);
+        assert_eq!(err.column(), 12);
+        assert!(err.message().contains("invalid hour 25"));
+    }
+
+    #[test]
+    fn invalid_minute_points_at_end_time() {
+        let err = parse("2026-08-18 09:00-12:75 acme-corp\n").unwrap_err();
+        assert_eq!(err.line(), 1);
+        assert_eq!(err.column(), 18);
+        assert!(err.message().contains("invalid minute 75"));
+    }
+
+    #[test]
+    fn zero_length_shift_points_at_end_time() {
+        let err = parse("2026-08-18 09:00-09:00 acme-corp\n").unwrap_err();
+        assert_eq!(err.line(), 1);
+        assert_eq!(err.column(), 18);
+        assert!(err.message().contains("must differ from start time"));
+    }
+
+    #[test]
+    fn error_line_number_accounts_for_skipped_lines() {
+        let input = "# header\n\n2026-08-18 09:00-12:15 acme-corp task\n2026-08-19 bad-range acme-corp\n";
+        let err = parse(input).unwrap_err();
+        assert_eq!(err.line(), 4);
+        assert_eq!(err.column(), 12);
+    }
 }
